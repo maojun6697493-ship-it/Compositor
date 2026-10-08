@@ -37,7 +37,7 @@ struct BlendModePicker: NSViewRepresentable {
         if coordinator.tracking { coordinator.session.previewBlendMode(nil, for: nil) }
         button.menu?.delegate = nil
     }
-    final class Coordinator: NSObject, NSMenuDelegate {
+    @MainActor final class Coordinator: NSObject, NSMenuDelegate {
         let session: EditorSession
         var tracking = false
         private var layerID: UUID?
