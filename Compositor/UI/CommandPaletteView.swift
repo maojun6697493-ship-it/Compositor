@@ -72,7 +72,7 @@ struct CommandPaletteView: View {
 final class CommandPaletteController {
     static let shared = CommandPaletteController()
     /// Left out of the palette: the palette itself and the system menus.
-    static let skipped: Set<String> = ["Command Palette…", "Window", "Help", "Services"]
+    static var skipped: Set<String> { Set(["Command Palette…", "Window", "Help", "Services"].map(\.uiLocalized)) }
 
     private(set) var panel: PalettePanel?
     private weak var window: NSWindow?

@@ -42,7 +42,7 @@ struct ShortcutChord: Codable, Equatable, Hashable {
         return flags
     }
     var label: String {
-        let special = ["\u{7f}": "Delete", "\r": "Return", "\u{1b}": "Esc", "\t": "Tab", " ": "Space",
+        let special = ["\u{7f}": "Delete".uiLocalized, "\r": "Return".uiLocalized, "\u{1b}": "Esc".uiLocalized, "\t": "Tab".uiLocalized, " ": "Space".uiLocalized,
                        "\u{f702}": "←", "\u{f703}": "→", "\u{f701}": "↓", "\u{f700}": "↑"]
         return (modifiers & 4 != 0 ? "⌃" : "") + (modifiers & 2 != 0 ? "⌥" : "")
             + (modifiers & 8 != 0 ? "⇧" : "") + (modifiers & 1 != 0 ? "⌘" : "")
@@ -167,14 +167,14 @@ final class ShortcutSettings {
         var assigned: [ShortcutChord: String] = [:]
         for definition in ShortcutDefinition.all {
             let chord = values[definition.id] ?? definition.original
-            guard chord.key.count == 1, (0...15).contains(chord.modifiers) else { return "Choose a single key with optional modifiers." }
+            guard chord.key.count == 1, (0...15).contains(chord.modifiers) else { return "Choose a single key with optional modifiers.".uiLocalized }
             if definition.group == "Text Editing", chord.modifiers & 7 == 0 {
-                return "Text-editing shortcuts need Command, Option, or Control so they do not replace normal typing."
+                return "Text-editing shortcuts need Command, Option, or Control so they do not replace normal typing.".uiLocalized
             }
             if [ShortcutChord("q", 1), ShortcutChord(",", 1), ShortcutChord("m", 3)].contains(chord) {
-                return "\(chord.label) is reserved by macOS."
+                return uiFormat("%@ is reserved by macOS.", chord.label)
             }
-            if let other = assigned[chord] { return "\(chord.label) is assigned to both \(other) and \(definition.title)." }
+            if let other = assigned[chord] { return uiFormat("%@ is assigned to both %@ and %@.", chord.label, other.uiLocalized, definition.title.uiLocalized) }
             assigned[chord] = definition.title
         }
         return nil
@@ -240,10 +240,13 @@ private struct KeyboardShortcutsSheet: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
                     ForEach(["Menus", "Canvas & Layers", "Text Editing"], id: \.self) { group in
-                        Text(group).font(.headline).padding(.top, 8)
-                        ForEach(ShortcutDefinition.all.filter { $0.group == group && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }) { definition in
+                        Text(group.uiLocalized).font(.headline).padding(.top, 8)
+                        ForEach(ShortcutDefinition.all.filter { definition in
+                            let localized = definition.title.uiLocalized
+                            return definition.group == group && (search.isEmpty || definition.title.localizedCaseInsensitiveContains(search) || localized.localizedCaseInsensitiveContains(search))
+                        }) { definition in
                             HStack {
-                                Text(definition.title)
+                                Text(definition.title.uiLocalized)
                                 Spacer()
                                 ShortcutRecorder(chord: draft[definition.id] ?? definition.original,
                                     recording: recording == definition.id,
@@ -289,8 +292,8 @@ private struct ShortcutRecorder: NSViewRepresentable {
     func makeNSView(context: Context) -> RecorderButton { RecorderButton() }
     func updateNSView(_ button: RecorderButton, context: Context) {
         button.start = start; button.finish = finish; button.recording = recording
-        button.title = recording ? "Press keys…" : chord.label
-        button.setAccessibilityLabel(recording ? "Press a shortcut" : chord.label)
+        button.title = recording ? "Press keys…".uiLocalized : chord.label
+        button.setAccessibilityLabel(recording ? "Press a shortcut".uiLocalized : chord.label)
         if recording, button.window?.firstResponder !== button { button.window?.makeFirstResponder(button) }
     }
     final class RecorderButton: NSButton {

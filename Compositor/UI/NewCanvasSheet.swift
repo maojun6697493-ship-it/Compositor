@@ -73,8 +73,9 @@ struct NewCanvasSheet: View {
     private var pixelHeight: Int? { unit.pixels(height, resolution: resolution) }
     private var valid: Bool { pixelWidth != nil && pixelHeight != nil }
     private var resolutionHelp: String {
-        let size = unit != .pixels ? pixelWidth.flatMap { w in pixelHeight.map { h in " · \(Int(resolution)) DPI: \(w) × \(h) pixels" } } : nil
-        return "Resolution: 72 for screens, 300 for print. Click to switch." + (size ?? "")
+        let base = "Resolution: 72 for screens, 300 for print. Click to switch.".uiLocalized
+        guard unit != .pixels, let w = pixelWidth, let h = pixelHeight else { return base }
+        return base + uiFormat(" · %lld DPI: %lld × %lld pixels", Int(resolution), w, h)
     }
     /// Shows the sizes in another unit, the same canvas written differently.
     private func switchUnit(to new: NewCanvasUnit) {
@@ -101,7 +102,7 @@ struct NewCanvasSheet: View {
                             Text("Custom").tag(CanvasPreset?.none)
                             ForEach(CanvasPreset.groups.indices, id: \.self) { group in
                                 Divider()
-                                ForEach(CanvasPreset.groups[group]) { Text($0.title).tag(CanvasPreset?.some($0)) }
+                                ForEach(CanvasPreset.groups[group]) { Text($0.title.uiLocalized).tag(CanvasPreset?.some($0)) }
                             }
                         }
                         .pickerStyle(.inline).labelsHidden()
@@ -147,8 +148,8 @@ struct NewCanvasSheet: View {
             }
             .font(.callout).foregroundStyle(.secondary)
             if !valid {
-                Text(unit == .pixels ? "Enter whole numbers from 1 to \(DocumentLimits.maxSide.formatted()) pixels."
-                                     : "Enter a size up to \(DocumentLimits.maxSide.formatted()) pixels at this DPI.")
+                Text(unit == .pixels ? uiFormat("Enter whole numbers from 1 to %@ pixels.", DocumentLimits.maxSide.formatted())
+                                     : uiFormat("Enter a size up to %@ pixels at this DPI.", DocumentLimits.maxSide.formatted()))
                     .font(.callout).foregroundStyle(.orange)
             }
             HStack(spacing: 10) {
@@ -202,9 +203,9 @@ struct NewCanvasSheet: View {
     }
     private func dimension(_ title: String, text: Binding<String>, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.callout.weight(.medium))
+            Text(title.uiLocalized).font(.callout.weight(.medium))
             HStack {
-                TextField(title, text: text).textFieldStyle(.plain)
+                TextField(title.uiLocalized, text: text).textFieldStyle(.plain)
                     .focused($focusedField, equals: field)
                     .accessibilityIdentifier(title.lowercased() + "Input")
                 Text(unit.rawValue).foregroundStyle(.secondary)
@@ -223,14 +224,14 @@ private struct CyclePill: View {
     init(_ title: String, help: String, action: @escaping () -> Void) { self.title = title; self.help = help; self.action = action }
     var body: some View {
         Button(action: action) {
-            Text(title).foregroundStyle(.secondary).monospacedDigit()
+            Text(title.uiLocalized).foregroundStyle(.secondary).monospacedDigit()
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(.quaternary.opacity(hovering ? 1 : 0), in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(help)
+        .help(help.uiLocalized)
     }
 }
 

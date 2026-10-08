@@ -1,0 +1,74 @@
+name: Chinese build
+
+# An installable arm64 .app for the Simplified Chinese localization.
+# No Apple Developer credentials: the app is ad-hoc signed. Sparkle is pointed
+# at a feed that does not exist so an official update cannot replace this build.
+on:
+  push:
+    branches:
+      - cursor/localize-zh-hans-452d
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-zh-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: arm64 app
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - name: Resolve Swift packages
+        run: >
+          xcodebuild -resolvePackageDependencies
+          -project Compositor.xcodeproj
+          -scheme Compositor
+          -onlyUsePackageVersionsFromResolvedFile
+
+      - name: Build Release
+        run: >
+          xcodebuild
+          -project Compositor.xcodeproj
+          -scheme Compositor
+          -configuration Release
+          -destination 'platform=macOS,arch=arm64'
+          -derivedDataPath DerivedData
+          CODE_SIGN_STYLE=Manual
+          CODE_SIGN_IDENTITY=-
+          DEVELOPMENT_TEAM=
+          CODE_SIGNING_ALLOWED=YES
+
+      - name: Disable Sparkle and ad-hoc sign
+        run: |
+          set -euo pipefail
+          APP="DerivedData/Build/Products/Release/Compositor.app"
+          test -d "$APP"
+          # The built signature already has the sandbox entitlements, with the
+          # bundle id expanded. Capture them before Info.plist changes.
+          codesign -d --entitlements :- "$APP" > entitlements.plist
+          /usr/libexec/PlistBuddy -c "Set :SUEnableAutomaticChecks false" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :SUFeedURL https://127.0.0.1/compositor-zh-hans-no-feed" "$APP/Contents/Info.plist"
+          codesign --force --sign - --options runtime --entitlements entitlements.plist --deep "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d --entitlements :- "$APP" | grep -q com.apple.security.app-sandbox
+
+      - name: Zip
+        run: ditto -c -k --keepParent DerivedData/Build/Products/Release/Compositor.app Compositor-zh-Hans.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@v7
+        with:
+          name: Compositor-zh-Hans
+          path: Compositor-zh-Hans.zip
+          if-no-files-found: error
+          retention-days: 14
