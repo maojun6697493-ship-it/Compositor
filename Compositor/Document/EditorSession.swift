@@ -102,7 +102,7 @@ enum NavigationTool: String, CaseIterable {
     }
 }
 
-@Observable
+@MainActor @Observable
 final class EditorSession {
     var skipsInitialClipboardCanvasSize = false
     var document: CanvasDocument?

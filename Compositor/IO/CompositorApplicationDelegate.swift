@@ -3,7 +3,7 @@ import AppKit
 import Sparkle
 #endif
 
-final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
     let workspace = ProjectWorkspace()
     var session: EditorSession { workspace.current.session }
     var projects: ProjectController { workspace.current.controller }

@@ -56,7 +56,7 @@ jobs:
           -configuration Release
           -destination 'platform=macOS,arch=arm64'
           -derivedDataPath DerivedData
-          MACOSX_DEPLOYMENT_TARGET=14.0
+          MACOSX_DEPLOYMENT_TARGET=15.0
           CODE_SIGN_STYLE=Manual
           CODE_SIGN_IDENTITY=-
           DEVELOPMENT_TEAM=
@@ -87,11 +87,11 @@ jobs:
           codesign --verify --strict --verbose=2 "$APP"
           codesign -d --entitlements :- "$APP" | grep -q com.apple.security.app-sandbox
           test ! -d "$APP/Contents/Frameworks/Sparkle.framework"
-          # Deployment target stays 14.0, and the SDK is the macOS 15 SDK that
-          # ships with Xcode 16.4. A 26 or 27 SDK would pull in a newer Swift.
+          # 15.0 is as new as this SDK can target, and the app uses macOS 15 APIs.
+          # The SDK is the macOS 15 SDK that ships with Xcode 16.4.
           BUILD_INFO=$(vtool -show-build "$EXEC")
           echo "$BUILD_INFO"
-          echo "$BUILD_INFO" | grep -q "minos 14.0"
+          echo "$BUILD_INFO" | grep -q "minos 15.0"
           echo "$BUILD_INFO" | grep -q "sdk 15."
           if echo "$BUILD_INFO" | grep -E -q "sdk 2[67]"; then
             echo "binary was built with a newer SDK than macOS 15" >&2

@@ -174,7 +174,11 @@ struct ContentView: View {
                     .disabled(session.isImporting || session.showsBusy || session.levels != nil)
                     .modifier(NewProjectDropTarget(workspace: applicationDelegate?.workspace))
             }
+#if compiler(>=6.2)
             ToolbarSpacer(.fixed, placement: .navigation)
+#else
+            ToolbarItem(placement: .navigation) { Spacer(minLength: 8) }
+#endif
             if let workspace = applicationDelegate?.workspace {
                 ToolbarItem(placement: .navigation) {
                     ProjectTabStrip(workspace: workspace)
@@ -183,11 +187,17 @@ struct ContentView: View {
                         // strip scrolls instead.
                         .frame(width: max(200, windowWidth - 352), height: 34, alignment: .center)
                 }
+#if compiler(>=6.2)
                 .sharedBackgroundVisibility(.hidden)
+#endif
             }
             // Absorb all remaining navigation-toolbar width before the zoom controls.
             // Without this spacer, the growing tab strip pushes the primary actions left.
+#if compiler(>=6.2)
             ToolbarSpacer(.flexible, placement: .navigation)
+#else
+            ToolbarItem(placement: .primaryAction) { Spacer() }
+#endif
             ToolbarItem(placement: .primaryAction) {
                 Button("Fit") { session.fit() }.help("Fit canvas in window (⌘0)")
                     .accessibilityIdentifier("fitCanvas").disabled(session.document == nil)
