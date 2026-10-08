@@ -21,25 +21,24 @@ concurrency:
 jobs:
   app:
     name: arm64 app
-    # The Mac this artifact runs on has the Swift 6.1 system runtime. Xcode 26
-    # and 27 emit symbols that runtime cannot resolve (Builtin.Int64's value
-    # witness, looked up in libswiftCoreAudio). Xcode 16.4 is Swift 6.1.
-    runs-on: macos-15
+    # Official 1.4.6, which launches on this Mac, was linked with LD 27037.1
+    # against the macOS 27.0 SDK (minos 26.0) and weak-links libswiftCoreAudio.
+    # Xcode 27.0's older linker links that dylib strongly, and dyld aborts on
+    # the missing CocoaError._nsError symbol instead of skipping it.
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Select Xcode 16.4
+      - name: Select Xcode 27
         run: |
           set -euo pipefail
-          sudo xcode-select -s /Applications/Xcode_16.4.app
+          XCODE=$(python3 scripts/select-xcode-27.py)
+          sudo xcode-select -s "$XCODE"
           xcodebuild -version
+          xcrun ld -v
           xcodebuild -showsdks
-          # Must be Swift 6.1. A newer compiler will crash at launch on the
-          # system Swift dylibs, even if the SDK version looks right.
-          swift --version
-          swift --version | grep -q "Swift version 6.1"
 
       - name: Resolve Swift packages
         run: >
@@ -55,8 +54,10 @@ jobs:
           -scheme Compositor
           -configuration Release
           -destination 'platform=macOS,arch=arm64'
+          -sdk macosx27.0
           -derivedDataPath DerivedData
-          MACOSX_DEPLOYMENT_TARGET=15.0
+          MACOSX_DEPLOYMENT_TARGET=26.0
+          OTHER_LDFLAGS='$(inherited) -Wl,-weak-lswiftCoreAudio'
           CODE_SIGN_STYLE=Manual
           CODE_SIGN_IDENTITY=-
           DEVELOPMENT_TEAM=
@@ -87,16 +88,25 @@ jobs:
           codesign --verify --strict --verbose=2 "$APP"
           codesign -d --entitlements :- "$APP" | grep -q com.apple.security.app-sandbox
           test ! -d "$APP/Contents/Frameworks/Sparkle.framework"
-          # 15.0 is as new as this SDK can target, and the app uses macOS 15 APIs.
-          # The SDK is the macOS 15 SDK that ships with Xcode 16.4.
-          BUILD_INFO=$(vtool -show-build "$EXEC")
-          echo "$BUILD_INFO"
-          echo "$BUILD_INFO" | grep -q "minos 15.0"
-          echo "$BUILD_INFO" | grep -q "sdk 15."
-          if echo "$BUILD_INFO" | grep -E -q "sdk 2[67]"; then
-            echo "binary was built with a newer SDK than macOS 15" >&2
+          # A strong libswiftCoreAudio load makes dyld abort. Every remaining
+          # line for that dylib has to be a weak link, as in the official app.
+          if otool -L "$EXEC" | grep libswiftCoreAudio | grep -v weak | grep -q .; then
+            echo "libswiftCoreAudio is still strongly linked" >&2
+            otool -L "$EXEC" | grep libswiftCoreAudio >&2
             exit 1
           fi
+          otool -L "$EXEC" | grep libswiftCoreAudio | grep -q weak
+
+      - name: Print link metadata
+        run: |
+          set -euo pipefail
+          EXEC="DerivedData/Build/Products/Release/Compositor.app/Contents/MacOS/Compositor"
+          echo "===== vtool -show-build ====="
+          vtool -show-build "$EXEC"
+          echo "===== otool -L ====="
+          otool -L "$EXEC"
+          vtool -show-build "$EXEC" | grep -q "minos 26.0"
+          vtool -show-build "$EXEC" | grep -q "sdk 27.0"
 
       - name: Zip
         run: ditto -c -k --keepParent DerivedData/Build/Products/Release/Compositor.app Compositor-zh-Hans.zip
