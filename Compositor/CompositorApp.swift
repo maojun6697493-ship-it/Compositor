@@ -1,5 +1,7 @@
 import SwiftUI
+#if !COMPOSITOR_WITHOUT_SPARKLE
 import Sparkle
+#endif
 
 @main
 struct CompositorApp: App {
@@ -92,9 +94,11 @@ struct CompositorApp: App {
                 }
                 // Grouped: a commands builder takes at most ten items.
                 Group {
+#if !COMPOSITOR_WITHOUT_SPARKLE
                     CommandGroup(after: .appInfo) {
                         Button("Check for Updates…") { applicationDelegate.updater.checkForUpdates(nil) }
                     }
+#endif
                     CommandGroup(after: .toolbar) {
                         Button("Command Palette…") {
                             CommandPaletteController.shared.toggle(session: session, over: applicationDelegate.projects.window)

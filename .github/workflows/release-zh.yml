@@ -1,8 +1,10 @@
 name: Chinese build
 
 # An installable arm64 .app for the Simplified Chinese localization.
-# No Apple Developer credentials: the app is ad-hoc signed. Sparkle is pointed
-# at a feed that does not exist so an official update cannot replace this build.
+# No Apple Developer credentials: the app is ad-hoc signed. Sparkle is not in
+# this artifact. Hardened runtime rejects a framework whose Team ID differs
+# from the app, and an ad-hoc signature has no Team ID, so shipping Sparkle
+# crashed at launch. The app is compiled without it and signed once.
 on:
   push:
     branches:
@@ -47,20 +49,32 @@ jobs:
           CODE_SIGN_IDENTITY=-
           DEVELOPMENT_TEAM=
           CODE_SIGNING_ALLOWED=YES
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS=COMPOSITOR_WITHOUT_SPARKLE
 
-      - name: Disable Sparkle and ad-hoc sign
+      - name: Remove Sparkle and ad-hoc sign
         run: |
           set -euo pipefail
           APP="DerivedData/Build/Products/Release/Compositor.app"
+          EXEC="$APP/Contents/MacOS/Compositor"
           test -d "$APP"
+          test -f "$EXEC"
           # The built signature already has the sandbox entitlements, with the
-          # bundle id expanded. Capture them before Info.plist changes.
+          # bundle id expanded. Capture them before the bundle changes.
           codesign -d --entitlements :- "$APP" > entitlements.plist
           /usr/libexec/PlistBuddy -c "Set :SUEnableAutomaticChecks false" "$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :SUFeedURL https://127.0.0.1/compositor-zh-hans-no-feed" "$APP/Contents/Info.plist"
-          codesign --force --sign - --options runtime --entitlements entitlements.plist --deep "$APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
+          rm -rf "$APP/Contents/Frameworks/Sparkle.framework"
+          python3 scripts/strip-sparkle-load-command.py "$EXEC"
+          if otool -L "$EXEC" | grep -q Sparkle; then
+            echo "Sparkle is still linked" >&2
+            exit 1
+          fi
+          # One signature for the whole bundle. --deep left Sparkle on its
+          # original team and the app ad-hoc, which dyld rejects.
+          codesign --force --sign - --options runtime --entitlements entitlements.plist "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
           codesign -d --entitlements :- "$APP" | grep -q com.apple.security.app-sandbox
+          test ! -d "$APP/Contents/Frameworks/Sparkle.framework"
 
       - name: Zip
         run: ditto -c -k --keepParent DerivedData/Build/Products/Release/Compositor.app Compositor-zh-Hans.zip
