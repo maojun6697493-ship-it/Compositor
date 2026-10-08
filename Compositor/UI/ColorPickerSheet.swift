@@ -130,7 +130,7 @@ struct ColorPickerSheet: View {
                 hsb.setRGB(rgb)
             })
         return GridRow {
-            Text(label).frame(width: 14, alignment: .leading)
+            Text(label.uiLocalized).frame(width: 14, alignment: .leading)
                 .scrubbable(sensitivity: 1, value: channelValue, range: 0...255)
             TextField(label, value: channelValue, format: .number)
                 .frame(width: 52)
@@ -140,7 +140,7 @@ struct ColorPickerSheet: View {
                                 rgb[keyPath: channel] = CGFloat(min(255, max(0, newValue.rounded()))) / 255
                                 hsb.setRGB(rgb)
                             })
-                .accessibilityLabel(label == "R" ? "Red" : label == "G" ? "Green" : "Blue")
+                .accessibilityLabel((label == "R" ? "Red" : label == "G" ? "Green" : "Blue").uiLocalized)
         }
     }
 
@@ -167,7 +167,7 @@ extension PaletteColor {
 
 /// Hosts the picker in the shared floating panel: first opened centered on the canvas,
 /// afterwards wherever it was last left. Closing it with the title-bar button cancels.
-final class ColorPickerPanelController: NSObject {
+@MainActor final class ColorPickerPanelController: NSObject {
     static let identifier = NSUserInterfaceItemIdentifier("colorPickerPanel")
     private let panel = FloatingPanelController(name: "colorPickerPanel")
     private weak var session: EditorSession?
@@ -207,7 +207,7 @@ struct DialogColorSwatch: View {
                 .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(title.uiLocalized)
         .onChange(of: session.colorPicker?.color) { _, _ in session.previewDialogColor() }
         .onDisappear { Self.closePicker(session) }
     }

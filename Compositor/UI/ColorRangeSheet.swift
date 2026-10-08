@@ -14,14 +14,14 @@ struct ColorRangeSheet: View {
                         // Holding Shift or Option lights up the eyedropper a click will use.
                         .background(edit?.effectiveMode == mode ? Color.accentColor.opacity(0.25) : .clear,
                                     in: RoundedRectangle(cornerRadius: 4))
-                        .help(help(mode))
-                        .accessibilityLabel("\(mode.rawValue) color")
+                        .help(help(mode).uiLocalized)
+                        .accessibilityLabel(uiFormat("%@ color", mode.rawValue.uiLocalized))
                 }
                 Spacer()
             }
             preview
-            Text(edit?.hasColors == true ? "Shift-click adds a color, Option-click takes one away."
-                                         : "Click the image to pick the color to select.")
+            Text(edit?.hasColors == true ? "Shift-click adds a color, Option-click takes one away.".uiLocalized
+                                         : "Click the image to pick the color to select.".uiLocalized)
                 .font(.callout).foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 Text("Fuzziness").fixedSize()

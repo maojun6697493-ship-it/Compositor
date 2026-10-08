@@ -172,14 +172,14 @@ extension CommandPaletteEntry {
     /// The tools, run by choosing them. With no document open there is nothing to use them on, so they're disabled.
     /// Commands that live on buttons rather than in the menu bar, so the palette finds them too: adding a layer mask,
     /// as the Layers panel's mask button does (Option for the black one).
-    static func layerCommands(for session: EditorSession) -> [CommandPaletteEntry] {
+    @MainActor static func layerCommands(for session: EditorSession) -> [CommandPaletteEntry] {
         let canAdd = session.canEditMask && session.activeLayer?.mask == nil
         let selected = session.selection != nil
         return [
-            CommandPaletteEntry(id: selected ? "Layer › Add Layer Mask from Selection" : "Layer › Add Layer Mask",
+            CommandPaletteEntry(id: (selected ? "Layer › Add Layer Mask from Selection" : "Layer › Add Layer Mask").uiLocalized,
                                 shortcut: nil, isEnabled: canAdd,
                                 perform: { [weak session] in session?.addMask(revealing: true) }),
-            CommandPaletteEntry(id: selected ? "Layer › Add Layer Mask Hiding Selection" : "Layer › Add Layer Mask (Hide All)",
+            CommandPaletteEntry(id: (selected ? "Layer › Add Layer Mask Hiding Selection" : "Layer › Add Layer Mask (Hide All)").uiLocalized,
                                 shortcut: nil, isEnabled: canAdd,
                                 perform: { [weak session] in session?.addMask(revealing: false) }),
         ]
@@ -188,8 +188,8 @@ extension CommandPaletteEntry {
     /// Every tool, and each of a tool's modes on its own, by the name someone would search for: Liquify is a mode of
     /// the Smear tool, Polygonal Lasso a mode of the Lasso, and neither is in a menu. The tool's key shows where a
     /// command's shortcut would.
-    static func tools(for session: EditorSession) -> [CommandPaletteEntry] {
-        typealias Setup = (EditorSession) -> Void
+    @MainActor static func tools(for session: EditorSession) -> [CommandPaletteEntry] {
+        typealias Setup = @MainActor (EditorSession) -> Void
         let tools: [(String, String, NavigationTool, Setup?)] = [
             ("Move / Transform", "V", .move, nil),
             ("Rectangular Marquee", "M", .marquee, { $0.marqueeKind = .rectangle }),
@@ -216,7 +216,7 @@ extension CommandPaletteEntry {
             ("Zoom", "Z", .zoom, nil),
         ]
         return tools.map { name, key, tool, setup in
-            CommandPaletteEntry(id: "Tool › \(name)", shortcut: key, isEnabled: session.document != nil,
+            CommandPaletteEntry(id: "Tool › \(name)".uiLocalized, shortcut: key, isEnabled: session.document != nil,
                                 perform: { [weak session] in
                                     guard let session else { return }
                                     session.selectTool(tool)

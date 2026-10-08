@@ -1,0 +1,120 @@
+name: Chinese build
+
+# An installable arm64 .app for the Simplified Chinese localization.
+# No Apple Developer credentials: the app is ad-hoc signed. Sparkle is not in
+# this artifact. Hardened runtime rejects a framework whose Team ID differs
+# from the app, and an ad-hoc signature has no Team ID, so shipping Sparkle
+# crashed at launch. The app is compiled without it and signed once.
+on:
+  push:
+    branches:
+      - cursor/localize-zh-hans-452d
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-zh-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: arm64 app
+    # Official 1.4.6, which launches on this Mac, was linked with LD 27037.1
+    # against the macOS 27.0 SDK (minos 26.0) and weak-links libswiftCoreAudio.
+    # Xcode 27.0's older linker links that dylib strongly, and dyld aborts on
+    # the missing CocoaError._nsError symbol instead of skipping it.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select Xcode 27
+        run: |
+          set -euo pipefail
+          XCODE=$(python3 scripts/select-xcode-27.py)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcrun ld -v
+          xcodebuild -showsdks
+
+      - name: Resolve Swift packages
+        run: >
+          xcodebuild -resolvePackageDependencies
+          -project Compositor.xcodeproj
+          -scheme Compositor
+          -onlyUsePackageVersionsFromResolvedFile
+
+      - name: Build Release
+        run: >
+          xcodebuild
+          -project Compositor.xcodeproj
+          -scheme Compositor
+          -configuration Release
+          -destination 'platform=macOS,arch=arm64'
+          -sdk macosx27.0
+          -derivedDataPath DerivedData
+          MACOSX_DEPLOYMENT_TARGET=26.0
+          OTHER_LDFLAGS='$(inherited) -Wl,-weak-lswiftCoreAudio'
+          CODE_SIGN_STYLE=Manual
+          CODE_SIGN_IDENTITY=-
+          DEVELOPMENT_TEAM=
+          CODE_SIGNING_ALLOWED=YES
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS=COMPOSITOR_WITHOUT_SPARKLE
+
+      - name: Remove Sparkle and ad-hoc sign
+        run: |
+          set -euo pipefail
+          APP="DerivedData/Build/Products/Release/Compositor.app"
+          EXEC="$APP/Contents/MacOS/Compositor"
+          test -d "$APP"
+          test -f "$EXEC"
+          # The built signature already has the sandbox entitlements, with the
+          # bundle id expanded. Capture them before the bundle changes.
+          codesign -d --entitlements :- "$APP" > entitlements.plist
+          /usr/libexec/PlistBuddy -c "Set :SUEnableAutomaticChecks false" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :SUFeedURL https://127.0.0.1/compositor-zh-hans-no-feed" "$APP/Contents/Info.plist"
+          rm -rf "$APP/Contents/Frameworks/Sparkle.framework"
+          python3 scripts/strip-sparkle-load-command.py "$EXEC"
+          if otool -L "$EXEC" | grep -q Sparkle; then
+            echo "Sparkle is still linked" >&2
+            exit 1
+          fi
+          # One signature for the whole bundle. --deep left Sparkle on its
+          # original team and the app ad-hoc, which dyld rejects.
+          codesign --force --sign - --options runtime --entitlements entitlements.plist "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          codesign -d --entitlements :- "$APP" | grep -q com.apple.security.app-sandbox
+          test ! -d "$APP/Contents/Frameworks/Sparkle.framework"
+          # A strong libswiftCoreAudio load makes dyld abort. Every remaining
+          # line for that dylib has to be a weak link, as in the official app.
+          if otool -L "$EXEC" | grep libswiftCoreAudio | grep -v weak | grep -q .; then
+            echo "libswiftCoreAudio is still strongly linked" >&2
+            otool -L "$EXEC" | grep libswiftCoreAudio >&2
+            exit 1
+          fi
+          otool -L "$EXEC" | grep libswiftCoreAudio | grep -q weak
+
+      - name: Print link metadata
+        run: |
+          set -euo pipefail
+          EXEC="DerivedData/Build/Products/Release/Compositor.app/Contents/MacOS/Compositor"
+          echo "===== vtool -show-build ====="
+          vtool -show-build "$EXEC"
+          echo "===== otool -L ====="
+          otool -L "$EXEC"
+          vtool -show-build "$EXEC" | grep -q "minos 26.0"
+          vtool -show-build "$EXEC" | grep -q "sdk 27.0"
+
+      - name: Zip
+        run: ditto -c -k --keepParent DerivedData/Build/Products/Release/Compositor.app Compositor-zh-Hans.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@v7
+        with:
+          name: Compositor-zh-Hans
+          path: Compositor-zh-Hans.zip
+          if-no-files-found: error
+          retention-days: 14

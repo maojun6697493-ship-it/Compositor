@@ -1,14 +1,19 @@
 import AppKit
+#if !COMPOSITOR_WITHOUT_SPARKLE
 import Sparkle
+#endif
 
-final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
     let workspace = ProjectWorkspace()
     var session: EditorSession { workspace.current.session }
     var projects: ProjectController { workspace.current.controller }
     var showEditor: (() -> Void)?
     /// Checks the update feed and installs new versions (Sparkle). Started only after launch: its first-run prompt,
     /// shown during launch, kept the editor window from ever opening.
+    /// The Chinese distribution build sets COMPOSITOR_WITHOUT_SPARKLE and does not ship the framework.
+#if !COMPOSITOR_WITHOUT_SPARKLE
     let updater = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+#endif
 
     // Finder Open With and Dock drops, including files delivered during launch.
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -61,7 +66,9 @@ final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
             guard let menu = note.object as? NSMenu, let index = note.userInfo?["NSMenuItemIndex"] as? Int else { return }
             MainActor.assumeIsolated { Self.removeIfSystemTextItem(at: index, in: menu) }
         }
+#if !COMPOSITOR_WITHOUT_SPARKLE
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [updater] in updater.startUpdater() }
+#endif
     }
 
     /// Black over everything but the window's inside in Canvas Only: the screen around it, its rounded corners and the
