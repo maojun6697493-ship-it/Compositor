@@ -27,7 +27,7 @@ struct BlendModePicker: NSViewRepresentable {
     func updateNSView(_ button: NSPopUpButton, context: Context) {
         button.isEnabled = session.canEditAppearance
         if !context.coordinator.tracking {
-            select(session.activeLayer?.blendMode ?? .normal, in: button)
+            context.coordinator.select(session.activeLayer?.blendMode ?? .normal, in: button)
         }
     }
     static func dismantleNSView(_ button: NSPopUpButton, coordinator: Coordinator) {
@@ -63,7 +63,7 @@ struct BlendModePicker: NSViewRepresentable {
                 self.session.previewBlendMode(nil, for: nil)
             }
         }
-        private func select(_ mode: LayerBlendMode, in button: NSPopUpButton) {
+        fileprivate func select(_ mode: LayerBlendMode, in button: NSPopUpButton) {
             guard let item = button.menu?.items.first(where: { $0.representedObject as? String == mode.rawValue }) else { return }
             button.select(item)
         }
