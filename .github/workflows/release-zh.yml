@@ -21,31 +21,25 @@ concurrency:
 jobs:
   app:
     name: arm64 app
-    # macOS 27 image. Xcode 26.6's macOS 26.5 SDK binds CocoaError._nsError into
-    # libobjc; dyld on macOS 27.0.1 (26A434) aborts because that symbol is gone.
-    runs-on: xcode-27
+    # The Mac this artifact runs on has the Swift 6.1 system runtime. Xcode 26
+    # and 27 emit symbols that runtime cannot resolve (Builtin.Int64's value
+    # witness, looked up in libswiftCoreAudio). Xcode 16.4 is Swift 6.1.
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Select Xcode 27.0
+      - name: Select Xcode 16.4
         run: |
           set -euo pipefail
-          # 27.0 ships the macOS 27.0 SDK, the release the user's 27.0.1 is on.
-          # Later Xcodes on this image ship a newer SDK, so they stay unused.
-          if [ -d /Applications/Xcode_27.0.app ]; then
-            XCODE=/Applications/Xcode_27.0.app
-          elif [ -d /Applications/Xcode_27.app ]; then
-            XCODE=/Applications/Xcode_27.app
-          else
-            echo "Xcode 27.0 is not installed" >&2
-            ls -d /Applications/Xcode*.app >&2 || true
-            exit 1
-          fi
-          sudo xcode-select -s "$XCODE"
+          sudo xcode-select -s /Applications/Xcode_16.4.app
           xcodebuild -version
           xcodebuild -showsdks
+          # Must be Swift 6.1. A newer compiler will crash at launch on the
+          # system Swift dylibs, even if the SDK version looks right.
+          swift --version
+          swift --version | grep -q "Swift version 6.1"
 
       - name: Resolve Swift packages
         run: >
@@ -61,9 +55,8 @@ jobs:
           -scheme Compositor
           -configuration Release
           -destination 'platform=macOS,arch=arm64'
-          -sdk macosx27.0
           -derivedDataPath DerivedData
-          MACOSX_DEPLOYMENT_TARGET=26.0
+          MACOSX_DEPLOYMENT_TARGET=14.0
           CODE_SIGN_STYLE=Manual
           CODE_SIGN_IDENTITY=-
           DEVELOPMENT_TEAM=
@@ -94,12 +87,16 @@ jobs:
           codesign --verify --strict --verbose=2 "$APP"
           codesign -d --entitlements :- "$APP" | grep -q com.apple.security.app-sandbox
           test ! -d "$APP/Contents/Frameworks/Sparkle.framework"
-          # minos stays 26.0 so the binary is not pinned to a newer OS than the
-          # user's. sdk 27.0 is the SDK that matches macOS 27.0.1.
+          # Deployment target stays 14.0, and the SDK is the macOS 15 SDK that
+          # ships with Xcode 16.4. A 26 or 27 SDK would pull in a newer Swift.
           BUILD_INFO=$(vtool -show-build "$EXEC")
           echo "$BUILD_INFO"
-          echo "$BUILD_INFO" | grep -q "minos 26.0"
-          echo "$BUILD_INFO" | grep -q "sdk 27.0"
+          echo "$BUILD_INFO" | grep -q "minos 14.0"
+          echo "$BUILD_INFO" | grep -q "sdk 15."
+          if echo "$BUILD_INFO" | grep -E -q "sdk 2[67]"; then
+            echo "binary was built with a newer SDK than macOS 15" >&2
+            exit 1
+          fi
 
       - name: Zip
         run: ditto -c -k --keepParent DerivedData/Build/Products/Release/Compositor.app Compositor-zh-Hans.zip
